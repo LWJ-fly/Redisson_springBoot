@@ -1,5 +1,7 @@
 package test.redisson.utils.LockUtil.service.impl;
 
+import org.redisson.api.RedissonClient;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import test.redisson.utils.LockUtil.enums.LockEnum;
 import test.redisson.utils.LockUtil.service.DistributedLockService;
@@ -13,25 +15,25 @@ import java.util.function.Supplier;
  * 版权所有 Copyright www.wenmeng.online
  */
 @Component
-public class RedisDistributedLockServiceImpl implements DistributedLockService {
+public class RedisDistributedLockImpl implements DistributedLockService {
+    @Autowired
+    private RedissonClient redissonClient;
+    
     @Override
-    public Boolean getLock(LockEnum lockEnum) {
-        return null;
+    public Boolean tryLock(LockEnum lockEnum) {
+        return redissonClient.getLock(String.valueOf(lockEnum.getCode())).tryLock();
     }
     
     @Override
-    public Boolean unLock(LockEnum lockEnum) {
-        return null;
+    public void unLock(LockEnum lockEnum) {
+        try {
+            redissonClient.getLock(String.valueOf(lockEnum.getCode())).unlock();
+        } catch (Exception ignore) { }
     }
     
     @Override
-    public void blockingAcquireLock(LockEnum lockEnum) {
+    public void lock(LockEnum lockEnum) {
     
-    }
-    
-    @Override
-    public Boolean semiBlockingAcquireLock(LockEnum lockEnum, Long waitTime) {
-        return null;
     }
     
     @Override

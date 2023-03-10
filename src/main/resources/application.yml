@@ -5,14 +5,7 @@ spring:
   application:
     name: redissonTest
   datasource:
-    url: jdbc:mysql://localhost:3306/part?serverTimezone=Asia/Shanghai&autoReconnect=true&failOverReadOnly=false&characterEncoding=UTF-8
+    url: jdbc:mysql://101.43.118.58:3306/part?serverTimezone=Asia/Shanghai&autoReconnect=true&failOverReadOnly=false&characterEncoding=UTF-8
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: root
-    password: root
-  # redis配置
-  redis:
-    host: 172.18.1.102
-    port: 6379
-    password: root
-redisson:
-      port: 6379
+    password: lwj123123

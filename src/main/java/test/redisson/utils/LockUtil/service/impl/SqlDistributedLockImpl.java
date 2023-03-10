@@ -12,6 +12,7 @@ import test.redisson.utils.LockUtil.entity.DistributedLock;
 import test.redisson.utils.LockUtil.enums.LockEnum;
 import test.redisson.utils.LockUtil.service.DistributedLockService;
 import test.redisson.utils.LockUtil.sqlService.SqlDistributedLockService;
+import test.redisson.utils.clazz.BeanUtil;
 
 import java.util.List;
 import java.util.Map;
@@ -27,44 +28,47 @@ import java.util.stream.Collectors;
  * 版权所有 Copyright www.wenmeng.online
  */
 @Component
-public class SqlDistributedLockServiceImpl implements DistributedLockService {
+public class SqlDistributedLockImpl implements DistributedLockService {
     
     @Autowired
     private SqlDistributedLockService sqlDistributedLockService;
     
     
     @Override
-    public Boolean getLock(LockEnum lockEnum) {
+    public Boolean tryLock(LockEnum lockEnum) {
         
         // 查询指定锁
         DistributedLock distributedLock = read(lockEnum);
         // 如果锁已被
-        return lockDb(distributedLock, lockEnum, 1000L);
+        return lockDb(distributedLock, lockEnum);
     }
     
     @Override
-    public Boolean unLock(LockEnum lockEnum) {
-        return null;
+    public void unLock(LockEnum lockEnum) {
+        // 本机IP && 线程Id && 锁次数
     }
     
     @Override
-    public void blockingAcquireLock(LockEnum lockEnum) {
-    
-    }
-    
-    @Override
-    public Boolean semiBlockingAcquireLock(LockEnum lockEnum, Long waitTime) {
-        return null;
+    public void lock(LockEnum lockEnum) {
+        while (!this.tryLock(lockEnum)) {
+            sleep();
+        }
     }
     
     @Override
     public <T> T automaticRenewallock(LockEnum lockEnum, Supplier<T> supplier) {
-        return null;
+        try {
+            lock(lockEnum);
+            return supplier.get();
+        } finally {
+            // 解锁
+            unLock(lockEnum);
+        }
     }
     
-    private static final Long expirationTime = 3 * 10 * 1000L;
+    private static final Long FIXED_DELAY = 10000L;
     
-    @Scheduled(fixedDelay = 10 * 1000)
+    @Scheduled(fixedDelay = 10000L)
     public void guardDogTask() {
         if (lockThreads.isEmpty()) {
             return;
@@ -73,9 +77,9 @@ public class SqlDistributedLockServiceImpl implements DistributedLockService {
         // 查询当前数据库中本机获取锁的信息  本机 && 锁未过期 && 锁未删除 &&
         long now = SystemClock.now();
         List<DistributedLock> distributedLocks = sqlDistributedLockService.list(new QueryWrapper<DistributedLock>()
-                .eq("hostIpv6", LocalIpUtil.getInet6Address())
-                .le("expirationTime", now)
-                .eq("deleteStatus", DeleteStatus.NORMAL.getCode()));
+                .eq(BeanUtil.fieldName(DistributedLock::getHostIpv4), LocalIpUtil.getInet4Address())
+                .le(BeanUtil.fieldName(DistributedLock::getExpirationTime), now)
+                .eq(BeanUtil.fieldName(DistributedLock::getDeleteStatus), DeleteStatus.NORMAL.getCode()));
         
         Map<Long, Thread> threadMap = lockThreads.stream().collect(Collectors.toMap(Thread::getId, e -> e));
         for (DistributedLock lock : distributedLocks) {
@@ -87,7 +91,7 @@ public class SqlDistributedLockServiceImpl implements DistributedLockService {
             // 线程持有锁，并且线程存活
             if (Objects.equals(thread.getName(), lock.getLockThreadName()) && thread.isAlive()) {
                 // 给当前锁设置过期时间为定时任务执行的三倍
-                lock.setExpirationTime(now + expirationTime);
+                lock.setExpirationTime(now + FIXED_DELAY * 3);
             } else {
                 lock.setDeleteStatus(DeleteStatus.DELETED.getCode());
             }
@@ -142,11 +146,10 @@ public class SqlDistributedLockServiceImpl implements DistributedLockService {
      * 方法描述：给当前实体类加锁
      * @param distributedLock 实体类信息
      * @param lockEnum 锁的枚举
-     * @param keepLockTime 锁定时间长度
      * @return {@link Boolean} 是否加锁成功
      * @date 2023-02-14 14:48:49
      */
-    private Boolean lockDb(DistributedLock distributedLock, LockEnum lockEnum, Long keepLockTime) {
+    private Boolean lockDb(DistributedLock distributedLock, LockEnum lockEnum) {
         if (isLocked(distributedLock, lockEnum)) {
             return false;
         }
@@ -157,7 +160,7 @@ public class SqlDistributedLockServiceImpl implements DistributedLockService {
                 .eq("id", distributedLock.getId())
                 .eq("expirationTime", distributedLock.getExpirationTime())
                 .eq("deleteStatus", distributedLock.getDeleteStatus())
-                .set("expirationTime", SystemClock.now() + expirationTime)
+                .set("expirationTime", SystemClock.now() + FIXED_DELAY * 3)
                 .set("deleteStatus", DeleteStatus.NORMAL.getCode()));
     }
     
@@ -172,7 +175,7 @@ public class SqlDistributedLockServiceImpl implements DistributedLockService {
         // 如果线程锁不存在，证明可以获取锁
         if (distributedLock == null) {
             // 插入一条旧值，便于后续更新数据
-            distributedLock = new DistributedLock(lockEnum.getCode(), 0L, DeleteStatus.DELETED.getCode(), LocalIpUtil.getInet6Address(), 0, "", 0);
+            distributedLock = new DistributedLock(lockEnum.getCode(), 0L, DeleteStatus.DELETED.getCode(), 0, "", 0);
             sqlDistributedLockService.save(distributedLock);
             return false;
         }
@@ -181,9 +184,16 @@ public class SqlDistributedLockServiceImpl implements DistributedLockService {
             return false;
         }
         // 判断锁是否为当前线程锁拥有 IpV6相同 && 当前线程持有
-        if (Objects.equals(distributedLock.getHostIpv6(), LocalIpUtil.getInet6Address()) && Objects.equals(distributedLock.getLockThreadId(), Thread.currentThread().getId())) {
+        if (Objects.equals(distributedLock.getHostIpv4(), LocalIpUtil.getInet6Address()) && Objects.equals(distributedLock.getLockThreadId(), Thread.currentThread().getId())) {
             return false;
         }
         return true;
+    }
+    
+    public void sleep() {
+        try {
+            Thread.sleep(200);
+        } catch (Exception ignored) {
+        }
     }
 }

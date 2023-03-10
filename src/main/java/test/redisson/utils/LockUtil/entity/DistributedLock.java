@@ -1,7 +1,9 @@
 package test.redisson.utils.LockUtil.entity;
 
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 import test.redisson.enums.DeleteStatus;
+import test.redisson.utils.LocalIpUtil;
 
 /**
  * 类描述：分布式锁实体类
@@ -10,6 +12,7 @@ import test.redisson.enums.DeleteStatus;
  * 版权所有 Copyright www.wenmeng.online
  */
 @Data
+@TableName("DistributedLock")
 public class DistributedLock {
     private Integer id;
     
@@ -24,9 +27,9 @@ public class DistributedLock {
     private int deleteStatus = DeleteStatus.NORMAL.getCode();
     
     /**
-     * 本机地址的IpV6
+     * 本机地址的IpV4
      */
-    private String hostIpv6;
+    private String hostIpv4 = LocalIpUtil.getInet4Address();
     
     /**
      * 当前线程Id
@@ -41,16 +44,15 @@ public class DistributedLock {
     /**
      * 当前线程加锁次数
      */
-    private Integer lockCount;
+    private Integer lockCount = 0;
     
     public DistributedLock() {
     }
     
-    public DistributedLock(Integer id, Long expirationTime, int deleteStatus, String hostIpv6, long lockThreadId, String lockThreadName, Integer lockCount) {
+    public DistributedLock(Integer id, Long expirationTime, int deleteStatus, long lockThreadId, String lockThreadName, Integer lockCount) {
         this.id = id;
         this.expirationTime = expirationTime;
         this.deleteStatus = deleteStatus;
-        this.hostIpv6 = hostIpv6;
         this.lockThreadId = lockThreadId;
         this.lockThreadName = lockThreadName;
         this.lockCount = lockCount;

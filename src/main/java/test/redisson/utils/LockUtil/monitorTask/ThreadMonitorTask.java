@@ -39,8 +39,8 @@ public class ThreadMonitorTask {
         // 查询当前数据库中本机获取锁的信息  本机 && 锁未过期 && 锁未删除 &&
         long now = SystemClock.now();
         List<DistributedLock> distributedLocks = sqlDistributedLockService.list(new QueryWrapper<DistributedLock>()
-                .eq("hostIpv6", LocalIpUtil.getInet6Address())
-                .le("expirationTime", now)
+                .eq("hostIpv4", LocalIpUtil.getInet4Address())
+                .ge("expirationTime", now)
                 .eq("deleteStatus", DeleteStatus.NORMAL.getCode()));
     
         Map<Long, Thread> threadMap = lockThreads.stream().collect(Collectors.toMap(Thread::getId, e -> e));
@@ -81,9 +81,9 @@ public class ThreadMonitorTask {
      * @param threadId 被监控线程的Id
      * @date 2023-03-04 17:08:51
      */
-    public static void removeThread(Long threadId) {
+    public static void removeThread(Thread thread) {
         for (Thread lockThread : lockThreads) {
-            if (Objects.equals(lockThread.getId(), threadId)) {
+            if (Objects.equals(lockThread.getId(), thread.getId()) && Objects.equals(lockThread.getName(), thread.getName())) {
                 lockThreads.remove(lockThread);
                 break;
             }
