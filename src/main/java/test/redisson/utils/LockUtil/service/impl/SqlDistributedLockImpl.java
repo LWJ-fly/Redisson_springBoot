@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import test.redisson.enums.DeleteStatus;
+import test.redisson.mybatisUtil.MybatisUpdateWrapper;
 import test.redisson.utils.LocalIpUtil;
 import test.redisson.utils.LockUtil.entity.DistributedLock;
 import test.redisson.utils.LockUtil.enums.LockEnum;
@@ -156,12 +157,12 @@ public class SqlDistributedLockImpl implements DistributedLockService {
         if (distributedLock == null) {
             distributedLock = read(lockEnum);
         }
-        return sqlDistributedLockService.update(new UpdateWrapper<DistributedLock>()
-                .eq("id", distributedLock.getId())
-                .eq("expirationTime", distributedLock.getExpirationTime())
-                .eq("deleteStatus", distributedLock.getDeleteStatus())
-                .set("expirationTime", SystemClock.now() + FIXED_DELAY * 3)
-                .set("deleteStatus", DeleteStatus.NORMAL.getCode()));
+        return sqlDistributedLockService.update(new MybatisUpdateWrapper<DistributedLock>()
+                .eq(DistributedLock::getId, distributedLock.getId())
+                .eq(DistributedLock::getExpirationTime, distributedLock.getExpirationTime())
+                .eq(DistributedLock::getDeleteStatus, distributedLock.getDeleteStatus())
+                .set(DistributedLock::getExpirationTime, SystemClock.now() + FIXED_DELAY * 3)
+                .set(DistributedLock::getDeleteStatus, DeleteStatus.NORMAL.getCode()));
     }
     
     
