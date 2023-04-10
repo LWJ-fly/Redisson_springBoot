@@ -1,6 +1,6 @@
 package test.redisson;
 
-import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson.JSON;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.Test;
 import org.redisson.Redisson;
@@ -26,6 +26,35 @@ public class RedissonApplicationTests {
     private final static String redisHost = "redis://172.18.1.102:6379";
     private final static Integer redisDatabase = 0;
     private final static String redisPWD = "redis.com";
+    private static Config config;
+    
+    public static RedissonClient getClient() {
+        return Redisson.create(createConfig());
+    }
+    
+    public static Config createConfig() {
+        if (config == null) {
+            config = new Config();
+            // 设置编码，String字符不进行转码，便于查看使用
+//            config.setCodec(new StringCodec());
+//            config.setCodec(new SerializationCodec());
+            config.useSingleServer()
+                    .setAddress(redisHost)
+                    .setDatabase(redisDatabase)
+                    .setPassword(redisPWD);
+        }
+        return config;
+    }
+    
+    /* @param nThreads the number of threads in the pool
+     * @return the newly created thread pool
+     * @throws IllegalArgumentException if {@code nThreads <= 0}
+     */
+    public static ExecutorService newFixedThreadPool(int nThreads) {
+        return new ThreadPoolExecutor(nThreads, nThreads,
+                0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<Runnable>());
+    }
     
     @Test
     public void contextLoads() throws IOException {
@@ -61,24 +90,6 @@ public class RedissonApplicationTests {
         System.out.println(Objects.equals(parse.get(0), map.get(0)));
     }
     
-    public static RedissonClient getClient() {
-        return Redisson.create(createConfig());
-    }
-    private static Config config;
-    public static Config createConfig() {
-        if (config == null) {
-            config = new Config();
-            // 设置编码，String字符不进行转码，便于查看使用
-//            config.setCodec(new StringCodec());
-//            config.setCodec(new SerializationCodec());
-            config.useSingleServer()
-                    .setAddress(redisHost)
-                    .setDatabase(redisDatabase)
-                    .setPassword(redisPWD);
-        }
-        return config;
-    }
-    
     /**
      * 方法描述：添加若干数字到redis
      * @date 2023-02-17 13:53:51
@@ -99,7 +110,7 @@ public class RedissonApplicationTests {
         RedissonClient client = getClient();
 //        RKeys keys = client.getKeys();
 //        keys.getKeysByPattern("*").forEach(System.out::println);
-    
+        
         // 对象 字符串
         RBucket<Object> bucket = client.getBucket("StringBucket");
         bucket.set("666");
@@ -134,7 +145,6 @@ public class RedissonApplicationTests {
         System.out.println(client.getKeys().deleteByPattern("*"));
     }
     
-    
     @Test
     public void test1() throws Exception {
         ExecutorService threadPool = newFixedThreadPool(20);
@@ -160,39 +170,29 @@ public class RedissonApplicationTests {
                 }
             }
             for (Thread thread : threads) {
-                System.out.println(thread.getId() +  " --status = " +  thread.isAlive());
+                System.out.println(thread.getId() + " --status = " + thread.isAlive());
             }
             System.out.println("\r\n\r\n\r\n\r\n");
         }
     }
     
     private void createThread(ExecutorService threadPool, CopyOnWriteArrayList<Thread> threads, int liveTimes) {
-        threadPool.execute(()->{
+        threadPool.execute(() -> {
             Thread currentThread = Thread.currentThread();
             currentThread.setName(RandomStringUtils.randomNumeric(5));
             if (threads != null) {
                 threads.add(currentThread);
             }
-            System.out.println(currentThread.getId() +  " --start");
+            System.out.println(currentThread.getId() + " --start");
             for (int j = 0; j < liveTimes; j++) {
                 try {
                     Thread.sleep(1000);
                 } catch (InterruptedException e) {
                 }
             }
-            System.out.println(currentThread.getId() +  " --runEnd");
+            System.out.println(currentThread.getId() + " --runEnd");
         });
-    
-    }
-    
-    /* @param nThreads the number of threads in the pool
-     * @return the newly created thread pool
-     * @throws IllegalArgumentException if {@code nThreads <= 0}
-     */
-    public static ExecutorService newFixedThreadPool(int nThreads) {
-        return new ThreadPoolExecutor(nThreads, nThreads,
-                0L, TimeUnit.MILLISECONDS,
-                new LinkedBlockingQueue<Runnable>());
+        
     }
     
 }

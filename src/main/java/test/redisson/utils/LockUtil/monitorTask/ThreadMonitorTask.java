@@ -25,41 +25,10 @@ import java.util.stream.Collectors;
 @Component
 public class ThreadMonitorTask {
     
-    @Autowired
-    private SqlDistributedLockService sqlDistributedLockService;
     // 获取锁的线程集合
     private static final CopyOnWriteArrayList<Thread> lockThreads = new CopyOnWriteArrayList<>();
-    
-    @Scheduled(fixedDelay = 10 * 1000)
-    public void guardDogTask() {
-        if (lockThreads.isEmpty()) {
-            return;
-        }
-        
-        // 查询当前数据库中本机获取锁的信息  本机 && 锁未过期 && 锁未删除 &&
-        long now = SystemClock.now();
-        List<DistributedLock> distributedLocks = sqlDistributedLockService.list(new QueryWrapper<DistributedLock>()
-                .eq("hostIpv4", LocalIpUtil.getInet4Address())
-                .ge("expirationTime", now)
-                .eq("deleteStatus", DeleteStatus.NORMAL.getCode()));
-    
-        Map<Long, Thread> threadMap = lockThreads.stream().collect(Collectors.toMap(Thread::getId, e -> e));
-        for (DistributedLock lock : distributedLocks) {
-            if (!threadMap.containsKey(lock.getLockThreadId())) {
-                // 当前线程队列中不包含此锁， 可能是同一服务器上运行多个实例，因此不进行处理
-                continue;
-            }
-            Thread thread = threadMap.get(lock.getLockThreadId());
-            // 线程持有锁，并且线程存活
-            if (Objects.equals(thread.getName(), lock.getLockThreadName()) && thread.isAlive()) {
-                // 给当前锁设置过期时间为定时任务执行的三倍
-                lock.setExpirationTime(now + 3 * 10 * 1000);
-            } else {
-                lock.setDeleteStatus(DeleteStatus.DELETED.getCode());
-            }
-        }
-        sqlDistributedLockService.updateBatchById(distributedLocks);
-    }
+    @Autowired
+    private SqlDistributedLockService sqlDistributedLockService;
     
     /**
      * 方法描述：添加线程到监控
@@ -78,7 +47,7 @@ public class ThreadMonitorTask {
     
     /**
      * 方法描述：移除线程到监控
-     * @param threadId 被监控线程的Id
+     * @param thread 被监控线程的Id
      * @date 2023-03-04 17:08:51
      */
     public static void removeThread(Thread thread) {
@@ -88,6 +57,37 @@ public class ThreadMonitorTask {
                 break;
             }
         }
+    }
+    
+    @Scheduled(fixedDelay = 10 * 1000)
+    public void guardDogTask() {
+        if (lockThreads.isEmpty()) {
+            return;
+        }
+        
+        // 查询当前数据库中本机获取锁的信息  本机 && 锁未过期 && 锁未删除 &&
+        long now = SystemClock.now();
+        List<DistributedLock> distributedLocks = sqlDistributedLockService.list(new QueryWrapper<DistributedLock>()
+                .eq("hostIpv4", LocalIpUtil.getInet4Address())
+                .ge("expirationTime", now)
+                .eq("deleteStatus", DeleteStatus.NORMAL.getCode()));
+        
+        Map<Long, Thread> threadMap = lockThreads.stream().collect(Collectors.toMap(Thread::getId, e -> e));
+        for (DistributedLock lock : distributedLocks) {
+            if (!threadMap.containsKey(lock.getLockThreadId())) {
+                // 当前线程队列中不包含此锁， 可能是同一服务器上运行多个实例，因此不进行处理
+                continue;
+            }
+            Thread thread = threadMap.get(lock.getLockThreadId());
+            // 线程持有锁，并且线程存活
+            if (Objects.equals(thread.getName(), lock.getLockThreadName()) && thread.isAlive()) {
+                // 给当前锁设置过期时间为定时任务执行的三倍
+                lock.setExpirationTime(now + 3 * 10 * 1000);
+            } else {
+                lock.setDeleteStatus(DeleteStatus.DELETED.getCode());
+            }
+        }
+        sqlDistributedLockService.updateBatchById(distributedLocks);
     }
     
 }

@@ -1,6 +1,7 @@
 package test.redisson.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import test.redisson.utils.LockUtil.enums.LockEnum;
@@ -15,18 +16,15 @@ import test.redisson.utils.LockUtil.service.impl.DistributedLockserviceImpl;
 @RestController
 public class web {
     
+    private static boolean unLock = false;
     @Autowired
+    @Qualifier("distributedLockserviceImpl")
     DistributedLockserviceImpl distributedLockService;
     
-    private static boolean unLock = false;
-    
     @GetMapping("lock")
-    public String getYml() throws InterruptedException {
+    public String lock() throws InterruptedException {
         unLock = false;
-        Boolean lock = distributedLockService.tryLock(LockEnum.EXPORT_TASK);
-        if (!lock) {
-            return "false";
-        }
+        distributedLockService.lock(LockEnum.EXPORT_TASK);
         while (true) {
             Thread.sleep(1000);
             if (unLock) {
@@ -38,8 +36,24 @@ public class web {
     }
     
     @GetMapping("unLock")
-    public Boolean lock() {
+    public Boolean unLock() {
         unLock = true;
         return unLock;
+    }
+    
+    @GetMapping("autoLock")
+    public Boolean autoLock() {
+        return distributedLockService.automaticRenewallock(LockEnum.EXPORT_TASK, () -> {
+            Boolean flag = false;
+            try {
+                for (int i = 0; i < 10; i++) {
+                    Thread.sleep(1000);
+                }
+                flag = true;
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            return flag;
+        });
     }
 }

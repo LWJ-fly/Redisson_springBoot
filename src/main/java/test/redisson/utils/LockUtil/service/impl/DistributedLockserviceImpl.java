@@ -1,7 +1,9 @@
 package test.redisson.utils.LockUtil.service.impl;
 
+import com.alibaba.fastjson.JSON;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import test.redisson.utils.LockUtil.enums.LockEnum;
 import test.redisson.utils.LockUtil.monitorTask.ThreadMonitorTask;
@@ -22,99 +24,96 @@ import java.util.function.Supplier;
 @Service
 public class DistributedLockserviceImpl implements DistributedLockService {
     
+    
+    /**
+     * 枚举线程锁，同一枚举只允许一个线程抢锁 K：锁ID V:线程id
+     */
+    private final Map<String, Long> lockEnumMap = new HashMap<>();
+    /**
+     * 枚举线程锁，同一枚举只允许一个线程抢锁 K:锁ID V：枚举加锁次数
+     */
+    private final Map<String, Integer> lockEnumCountMap = new HashMap<>();
     /**
      * 线程锁
      */
     private final ReentrantLock lock = new ReentrantLock();
     /**
-     * 枚举线程锁，同一枚举只允许一个线程抢锁 K：枚举code  V:线程id
-     */
-    private static final Map<Integer, Long> LOCK_ENUM_MAP = new HashMap<>();
-    /**
-     * 枚举线程锁，同一枚举只允许一个线程抢锁 K:枚举code V:锁次数
-     */
-    private static final Map<Integer, Integer> LOCK_ENUM_COUNT_MAP = new HashMap<>();
-    
-    @Autowired(required = false)
-    private SqlDistributedLockImpl sqlLockService;
-    
-    @Autowired(required = false)
-    private RedisDistributedLockImpl redisLockService;
-    /**
      * 获取配置文件，判断是否启用Redis
      */
-    private final Boolean redisUsable = true;
+    @Value("${redisUsable}")
+    private String redisUsable;
+    @Autowired
+    private SqlDistributedLockImpl sqlLockService;
     
+    @Autowired
+    private RedisDistributedLockImpl redisLockService;
+    
+    /**
+     * 方法描述：释放锁
+     * @param lockEnum 锁的枚举
+     * @return {@link Boolean} 是否加锁成功
+     * @date 2023-02-14 14:48:49
+     */
     @Override
-    public Boolean tryLock(LockEnum lockEnum) {
-        return tryLockThreadAndCodeFun(lockEnum, () -> {
-            // redis是否可用
-            if (redisUsable) {
-                return redisLockService.tryLock(lockEnum);
-            } else {
-                return sqlLockService.tryLock(lockEnum);
-            }
-        });
+    public void unLock(LockEnum lockEnum) {
+        unLock(lockEnum, null);
     }
     
     @Override
-    public void unLock(LockEnum lockEnum) {
-        lockThreadAndCodeFun(lockEnum, ()->{
-            // redis是否可用
-            if (redisUsable) {
-                redisLockService.unLock(lockEnum);
-            } else {
-                sqlLockService.unLock(lockEnum);
-            }
-            unLockEnum(lockEnum);
-            return null;
-        });
+    public void unLock(LockEnum lockEnum, Object subKey) {
+        try {
+            lockFun(lockEnum, subKey, () -> {
+                // redis是否可用
+                if (Boolean.parseBoolean(redisUsable)) {
+                    redisLockService.unLock(lockEnum, subKey);
+                } else {
+                    sqlLockService.unLock(lockEnum, subKey);
+                }
+                return false;
+            });
+        } finally {
+            unLockEnum(lockEnum, subKey);
+            unLockEnum(lockEnum, subKey);
+        }
     }
     
     @Override
     public void lock(LockEnum lockEnum) {
-        lockThreadAndCodeFun(lockEnum, ()->{
+        lock(lockEnum, null);
+    }
+    
+    @Override
+    public void lock(LockEnum lockEnum, Object subKey) {
+        lockFun(lockEnum, subKey, () -> {
             // redis是否可用
-            if (redisUsable) {
-                redisLockService.lock(lockEnum);
+            if (Boolean.parseBoolean(redisUsable)) {
+                redisLockService.lock(lockEnum, subKey);
             } else {
-                sqlLockService.lock(lockEnum);
+                sqlLockService.lock(lockEnum, subKey);
             }
-            unLockEnum(lockEnum);
             return null;
         });
     }
     
     @Override
     public <T> T automaticRenewallock(LockEnum lockEnum, Supplier<T> supplier) {
+        return automaticRenewallock(lockEnum, null, supplier);
+    }
+    
+    @Override
+    public <T> T automaticRenewallock(LockEnum lockEnum, Object subKey, Supplier<T> supplier) {
         try {
-            return lockThreadAndCodeFun(lockEnum, () -> {
-                if (redisUsable) {
+            return lockFun(lockEnum, subKey, () -> {
+                if (Boolean.parseBoolean(redisUsable)) {
                     return redisLockService.automaticRenewallock(lockEnum, supplier);
                 } else {
-                    return sqlLockService.automaticRenewallock(lockEnum, supplier);
+                    return sqlLockService.automaticRenewallock(lockEnum, subKey, supplier);
                 }
             });
         } finally {
-            unLockEnum(lockEnum);
+            unLockEnum(lockEnum, subKey);
         }
     }
-    
-    
-    
-    /**
-     * 方法描述：非阻塞式获取线程锁
-     * @param supplier 获取锁后执行事件
-     * @return {@link Boolean} 是否获取锁成功
-     * @date 2023-02-14 11:28:04
-     */
-    private Boolean tryLockThreadAndCodeFun(LockEnum lockEnum, Supplier<Boolean> supplier) {
-        if (lockedEnum(lockEnum)) {
-            return supplier.get();
-        }
-        return false;
-    }
-    
     
     /**
      * 方法描述：阻塞式获取线程锁
@@ -122,68 +121,67 @@ public class DistributedLockserviceImpl implements DistributedLockService {
      * @return {@link T} 返回类型
      * @date 2023-02-14 11:27:18
      */
-    private <T> T lockThreadAndCodeFun(LockEnum lockEnum, Supplier<T> supplier) {
-        try {
-            while (!lockedEnum(lockEnum)) {
-                sleep();
-            }
-            return supplier.get();
-        } finally {
-            unLockEnum(lockEnum);
+    private <T> T lockFun(LockEnum lockEnum, Object subKey, Supplier<T> supplier) {
+        while (lockedEnum(lockEnum, subKey)) {
+            sleep();
         }
+        return supplier.get();
     }
     
     /**
-     * 方法描述：解锁枚举
-     * @param lockEnum 枚举值
-     * @date 2023-03-10 15:30:50
+     * 方法描述：校验是否已经被其他线程加锁
+     * @param lockEnum 加锁的枚举
+     * @param subKey 锁的子码（划分更小锁粒度）
+     * @return {@link Boolean} true:已经被其他线程加锁  false:被当前线程加锁
+     * @date 2023-03-10 13:33:02
      */
-    private void unLockEnum(LockEnum lockEnum) {
+    private Boolean lockedEnum(LockEnum lockEnum, Object subKey) {
         lock.lock();
         try {
-            Integer key = lockEnum.getCode();
+            String key = getKey(lockEnum, subKey);
             Thread thread = Thread.currentThread();
-            if (LOCK_ENUM_MAP.containsKey(key) && Objects.equals(LOCK_ENUM_MAP.get(key), thread.getId())) {
-                if (LOCK_ENUM_COUNT_MAP.get(key) > 1) {
-                    LOCK_ENUM_COUNT_MAP.put(key,LOCK_ENUM_COUNT_MAP.get(key) - 1);
-                    return;
-                }
-                if (!redisUsable) {
-                    ThreadMonitorTask.removeThread(thread);
-                }
-                LOCK_ENUM_MAP.remove(key);
-                LOCK_ENUM_COUNT_MAP.remove(key);
+            if (!Boolean.parseBoolean(redisUsable)) {
+                // 添加定时监控事件
+                ThreadMonitorTask.addThread(thread);
             }
+            if (lockEnumMap.containsKey(key)) {
+                if (!Objects.equals(lockEnumMap.get(key), thread.getId()) && lockEnumCountMap.containsKey(key) && lockEnumCountMap.get(key) > 0) {
+                    return true;
+                }
+                lockEnumCountMap.put(key, lockEnumCountMap.get(key) + 1);
+                return false;
+            }
+            // 设置线程名称  = 锁备注 + 锁编码 + 随机码
+            Thread.currentThread().setName(lockEnum.getDesc() + "_" + key + "_" + RandomStringUtils.randomAlphabetic(5));
+            lockEnumMap.put(key, thread.getId());
+            lockEnumCountMap.put(key, 1);
+            return false;
         } finally {
             lock.unlock();
         }
     }
     
     /**
-     * 方法描述：锁枚举值
-     * @param lockEnum 枚举值
-     * @return {@link Boolean} true：锁成功    false：锁失败
-     * @date 2023-03-10 15:29:39
+     * 方法描述：解锁当前线程
+     * @param lockEnum 解锁线程枚举
+     * @date 2023-03-10 13:26:21
      */
-    private Boolean lockedEnum(LockEnum lockEnum) {
+    private void unLockEnum(LockEnum lockEnum, Object subKey) {
         lock.lock();
         try {
-            Integer key = lockEnum.getCode();
+            String key = getKey(lockEnum, subKey);
             Thread thread = Thread.currentThread();
-            if (LOCK_ENUM_MAP.containsKey(key)) {
-                if (!Objects.equals(LOCK_ENUM_MAP.get(key), thread.getId())) {
-                    return false;
+            if (lockEnumMap.containsKey(key) && Objects.equals(lockEnumMap.get(key), thread.getId())) {
+                if (lockEnumCountMap.get(key) > 1) {
+                    lockEnumCountMap.put(key, lockEnumCountMap.get(key) - 1);
+                    return;
                 }
-                LOCK_ENUM_COUNT_MAP.put(key, LOCK_ENUM_COUNT_MAP.get(key) + 1);
-                return true;
+                thread.setName(RandomStringUtils.randomAlphabetic(20));
+                lockEnumMap.remove(key);
+                lockEnumCountMap.remove(key);
+                // 移除定时监控事件
+                ThreadMonitorTask.removeThread(thread);
             }
-            // 设置线程名称  = 锁备注 + 锁编码 + 随机码
-            Thread.currentThread().setName(lockEnum.getDesc() + "_" + lockEnum.getCode() + "_" + RandomStringUtils.randomAlphabetic(5));
-            LOCK_ENUM_MAP.put(key, thread.getId());
-            if (!redisUsable) {
-                ThreadMonitorTask.addThread(thread);
-            }
-            return true;
         } finally {
             lock.unlock();
         }
@@ -194,5 +192,26 @@ public class DistributedLockserviceImpl implements DistributedLockService {
             Thread.sleep(200);
         } catch (Exception ignored) {
         }
+    }
+    
+    protected String getKey(LockEnum lockEnum, Object subKey) {
+        if (lockEnum == null && subKey == null) {
+            return null;
+        }
+        if (lockEnum != null && subKey == null) {
+            return String.valueOf(lockEnum.getCode());
+        }
+        if (lockEnum == null) {
+            String key = JSON.toJSONString(subKey);
+            if (key.length() > 50) {
+                key = key.substring(0, 49);
+            }
+            return key;
+        }
+        String key = lockEnum.getCode() + "_" + JSON.toJSONString(subKey);
+        if (key.length() > 50) {
+            key = key.substring(0, 49);
+        }
+        return key;
     }
 }

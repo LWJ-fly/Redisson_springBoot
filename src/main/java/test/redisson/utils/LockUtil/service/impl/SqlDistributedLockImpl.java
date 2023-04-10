@@ -1,7 +1,6 @@
 package test.redisson.utils.LockUtil.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.core.toolkit.SystemClock;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -29,19 +28,49 @@ import java.util.stream.Collectors;
  * 版权所有 Copyright www.wenmeng.online
  */
 @Component
-public class SqlDistributedLockImpl implements DistributedLockService {
+public class SqlDistributedLockImpl extends DistributedLockserviceImpl implements DistributedLockService {
     
+    private static final Long FIXED_DELAY = 10000L;
+    // 获取锁的线程集合
+    private static final CopyOnWriteArrayList<Thread> lockThreads = new CopyOnWriteArrayList<>();
     @Autowired
     private SqlDistributedLockService sqlDistributedLockService;
     
+    /**
+     * 方法描述：添加线程到监控
+     * @param thread 被监控线程
+     * @date 2023-03-04 17:08:51
+     */
+    public static void addThread(Thread thread) {
+        for (Thread lockThread : lockThreads) {
+            if (Objects.equals(lockThread.getId(), thread.getId())) {
+                lockThreads.remove(lockThread);
+                break;
+            }
+        }
+        lockThreads.add(thread);
+    }
     
-    @Override
-    public Boolean tryLock(LockEnum lockEnum) {
+    /**
+     * 方法描述：移除线程到监控
+     * @param threadId 被监控线程的Id
+     * @date 2023-03-04 17:08:51
+     */
+    public static void removeThread(Long threadId) {
+        for (Thread lockThread : lockThreads) {
+            if (Objects.equals(lockThread.getId(), threadId)) {
+                lockThreads.remove(lockThread);
+                break;
+            }
+        }
+    }
+    
+    public Boolean tryLock(LockEnum lockEnum, Object subKey) {
         
         // 查询指定锁
-        DistributedLock distributedLock = read(lockEnum);
+        DistributedLock distributedLock = read(lockEnum, subKey);
         // 如果锁已被
-        return lockDb(distributedLock, lockEnum);
+        return lockDb(distributedLock, lockEnum, subKey);
     }
     
     @Override
@@ -50,14 +79,14 @@ public class SqlDistributedLockImpl implements DistributedLockService {
     }
     
     @Override
-    public void lock(LockEnum lockEnum) {
-        while (!this.tryLock(lockEnum)) {
+    public void lock(LockEnum lockEnum, Object subKey) {
+        while (!this.tryLock(lockEnum, subKey)) {
             sleep();
         }
     }
     
     @Override
-    public <T> T automaticRenewallock(LockEnum lockEnum, Supplier<T> supplier) {
+    public <T> T automaticRenewallock(LockEnum lockEnum, Object subKey, Supplier<T> supplier) {
         try {
             lock(lockEnum);
             return supplier.get();
@@ -66,8 +95,6 @@ public class SqlDistributedLockImpl implements DistributedLockService {
             unLock(lockEnum);
         }
     }
-    
-    private static final Long FIXED_DELAY = 10000L;
     
     @Scheduled(fixedDelay = 10000L)
     public void guardDogTask() {
@@ -100,46 +127,14 @@ public class SqlDistributedLockImpl implements DistributedLockService {
         sqlDistributedLockService.updateBatchById(distributedLocks);
     }
     
-    // 获取锁的线程集合
-    private static final CopyOnWriteArrayList<Thread> lockThreads = new CopyOnWriteArrayList<>();
-    
-    /**
-     * 方法描述：添加线程到监控
-     * @param thread 被监控线程
-     * @date 2023-03-04 17:08:51
-     */
-    public static void addThread(Thread thread) {
-        for (Thread lockThread : lockThreads) {
-            if (Objects.equals(lockThread.getId(), thread.getId())) {
-                lockThreads.remove(lockThread);
-                break;
-            }
-        }
-        lockThreads.add(thread);
-    }
-    
-    /**
-     * 方法描述：移除线程到监控
-     * @param threadId 被监控线程的Id
-     * @date 2023-03-04 17:08:51
-     */
-    public static void removeThread(Long threadId) {
-        for (Thread lockThread : lockThreads) {
-            if (Objects.equals(lockThread.getId(), threadId)) {
-                lockThreads.remove(lockThread);
-                break;
-            }
-        }
-    }
-    
     /**
      * 方法描述：读取锁枚举
      * @param lockEnum 锁的枚举
      * @return {@link DistributedLock} 锁信息
      * @date 2023-03-04 17:17:16
      */
-    private DistributedLock read(LockEnum lockEnum) {
-        return sqlDistributedLockService.getById(lockEnum.getCode());
+    private DistributedLock read(LockEnum lockEnum, Object subKey) {
+        return sqlDistributedLockService.getById(getKey(lockEnum, subKey));
     }
     
     
@@ -150,12 +145,12 @@ public class SqlDistributedLockImpl implements DistributedLockService {
      * @return {@link Boolean} 是否加锁成功
      * @date 2023-02-14 14:48:49
      */
-    private Boolean lockDb(DistributedLock distributedLock, LockEnum lockEnum) {
+    private Boolean lockDb(DistributedLock distributedLock, LockEnum lockEnum, Object subKey) {
         if (isLocked(distributedLock, lockEnum)) {
             return false;
         }
         if (distributedLock == null) {
-            distributedLock = read(lockEnum);
+            distributedLock = read(lockEnum, subKey);
         }
         return sqlDistributedLockService.update(new MybatisUpdateWrapper<DistributedLock>()
                 .eq(DistributedLock::getId, distributedLock.getId())
@@ -185,12 +180,10 @@ public class SqlDistributedLockImpl implements DistributedLockService {
             return false;
         }
         // 判断锁是否为当前线程锁拥有 IpV6相同 && 当前线程持有
-        if (Objects.equals(distributedLock.getHostIpv4(), LocalIpUtil.getInet6Address()) && Objects.equals(distributedLock.getLockThreadId(), Thread.currentThread().getId())) {
-            return false;
-        }
-        return true;
+        return !Objects.equals(distributedLock.getHostIpv4(), LocalIpUtil.getInet6Address()) || !Objects.equals(distributedLock.getLockThreadId(), Thread.currentThread().getId());
     }
     
+    @Override
     public void sleep() {
         try {
             Thread.sleep(200);
