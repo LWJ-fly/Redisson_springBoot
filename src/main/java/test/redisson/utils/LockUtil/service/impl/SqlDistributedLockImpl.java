@@ -1,6 +1,5 @@
 package test.redisson.utils.LockUtil.service.impl;
 
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.SystemClock;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -10,9 +9,7 @@ import test.redisson.mybatisUtil.MybatisUpdateWrapper;
 import test.redisson.utils.LocalIpUtil;
 import test.redisson.utils.LockUtil.entity.DistributedLock;
 import test.redisson.utils.LockUtil.enums.LockEnum;
-import test.redisson.utils.LockUtil.service.DistributedLockService;
 import test.redisson.utils.LockUtil.sqlService.SqlDistributedLockService;
-import test.redisson.utils.clazz.BeanUtil;
 
 import java.util.List;
 import java.util.Map;
@@ -28,7 +25,7 @@ import java.util.stream.Collectors;
  * 版权所有 Copyright www.wenmeng.online
  */
 @Component
-public class SqlDistributedLockImpl extends DistributedLockserviceImpl implements DistributedLockService {
+public class SqlDistributedLockImpl extends DistributedLockServiceImpl {
     
     private static final Long FIXED_DELAY = 10000L;
     // 获取锁的线程集合
@@ -66,7 +63,6 @@ public class SqlDistributedLockImpl extends DistributedLockserviceImpl implement
     }
     
     public Boolean tryLock(LockEnum lockEnum, Object subKey) {
-        
         // 查询指定锁
         DistributedLock distributedLock = read(lockEnum, subKey);
         // 如果锁已被
@@ -74,8 +70,16 @@ public class SqlDistributedLockImpl extends DistributedLockserviceImpl implement
     }
     
     @Override
-    public void unLock(LockEnum lockEnum) {
+    public void unLock(LockEnum lockEnum, Object subKey) {
         // 本机IP && 线程Id && 锁次数
+        sqlDistributedLockService.update(new MybatisUpdateWrapper<DistributedLock>()
+                .eq(DistributedLock::getId, getKey(lockEnum, subKey))
+                .ge(DistributedLock::getExpirationTime, SystemClock.now())
+                .ge(DistributedLock::getLockCount, 0)
+                .eq(DistributedLock::getDeleteStatus, DeleteStatus.NORMAL.getCode())
+                .set(DistributedLock::getExpirationTime, SystemClock.now() - FIXED_DELAY * 3)
+                .set(DistributedLock::getLockCount, 0)
+                .set(DistributedLock::getDeleteStatus, DeleteStatus.DELETED.getCode()));
     }
     
     @Override
@@ -88,11 +92,11 @@ public class SqlDistributedLockImpl extends DistributedLockserviceImpl implement
     @Override
     public <T> T automaticRenewallock(LockEnum lockEnum, Object subKey, Supplier<T> supplier) {
         try {
-            lock(lockEnum);
+            lock(lockEnum, subKey);
             return supplier.get();
         } finally {
             // 解锁
-            unLock(lockEnum);
+            unLock(lockEnum, subKey);
         }
     }
     
@@ -104,10 +108,10 @@ public class SqlDistributedLockImpl extends DistributedLockserviceImpl implement
         
         // 查询当前数据库中本机获取锁的信息  本机 && 锁未过期 && 锁未删除 &&
         long now = SystemClock.now();
-        List<DistributedLock> distributedLocks = sqlDistributedLockService.list(new QueryWrapper<DistributedLock>()
-                .eq(BeanUtil.fieldName(DistributedLock::getHostIpv4), LocalIpUtil.getInet4Address())
-                .le(BeanUtil.fieldName(DistributedLock::getExpirationTime), now)
-                .eq(BeanUtil.fieldName(DistributedLock::getDeleteStatus), DeleteStatus.NORMAL.getCode()));
+        List<DistributedLock> distributedLocks = sqlDistributedLockService.list(new MybatisUpdateWrapper<DistributedLock>()
+                .eq(DistributedLock::getHostIpv4, LocalIpUtil.getInet4Address())
+                .le(DistributedLock::getExpirationTime, now)
+                .eq(DistributedLock::getDeleteStatus, DeleteStatus.NORMAL.getCode()));
         
         Map<Long, Thread> threadMap = lockThreads.stream().collect(Collectors.toMap(Thread::getId, e -> e));
         for (DistributedLock lock : distributedLocks) {
@@ -146,7 +150,7 @@ public class SqlDistributedLockImpl extends DistributedLockserviceImpl implement
      * @date 2023-02-14 14:48:49
      */
     private Boolean lockDb(DistributedLock distributedLock, LockEnum lockEnum, Object subKey) {
-        if (isLocked(distributedLock, lockEnum)) {
+        if (isLocked(distributedLock, lockEnum, subKey)) {
             return false;
         }
         if (distributedLock == null) {
@@ -167,11 +171,11 @@ public class SqlDistributedLockImpl extends DistributedLockserviceImpl implement
      * @return {@link Boolean} true，已经被其他线程加锁、 false 可以获取锁
      * @date 2023-02-14 13:54:15
      */
-    private Boolean isLocked(DistributedLock distributedLock, LockEnum lockEnum) {
+    private Boolean isLocked(DistributedLock distributedLock, LockEnum lockEnum, Object subKey) {
         // 如果线程锁不存在，证明可以获取锁
         if (distributedLock == null) {
             // 插入一条旧值，便于后续更新数据
-            distributedLock = new DistributedLock(lockEnum.getCode(), 0L, DeleteStatus.DELETED.getCode(), 0, "", 0);
+            distributedLock = new DistributedLock(getKey(lockEnum, subKey), 0L, DeleteStatus.DELETED.getCode(), 0, "", 0);
             sqlDistributedLockService.save(distributedLock);
             return false;
         }

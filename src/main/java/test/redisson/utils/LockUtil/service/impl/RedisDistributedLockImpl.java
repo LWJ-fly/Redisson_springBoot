@@ -5,7 +5,6 @@ import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import test.redisson.utils.LockUtil.enums.LockEnum;
-import test.redisson.utils.LockUtil.service.DistributedLockService;
 
 import java.util.function.Supplier;
 
@@ -16,7 +15,7 @@ import java.util.function.Supplier;
  * 版权所有 Copyright www.wenmeng.online
  */
 @Component
-public class RedisDistributedLockImpl extends DistributedLockserviceImpl implements DistributedLockService {
+public class RedisDistributedLockImpl extends DistributedLockServiceImpl {
     @Autowired
     private RedissonClient redissonClient;
     

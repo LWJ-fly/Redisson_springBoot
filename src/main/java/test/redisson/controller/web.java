@@ -5,7 +5,8 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import test.redisson.utils.LockUtil.enums.LockEnum;
-import test.redisson.utils.LockUtil.service.impl.DistributedLockserviceImpl;
+import test.redisson.utils.LockUtil.service.DistributedLockService;
+import test.redisson.utils.LockUtil.service.impl.DistributedLockServiceImpl;
 
 /**
  * 类描述：请求
@@ -18,8 +19,8 @@ public class web {
     
     private static boolean unLock = false;
     @Autowired
-    @Qualifier("distributedLockserviceImpl")
-    DistributedLockserviceImpl distributedLockService;
+    @Qualifier("distributedLockServiceImpl")
+    DistributedLockServiceImpl distributedLockService;
     
     @GetMapping("lock")
     public String lock() throws InterruptedException {

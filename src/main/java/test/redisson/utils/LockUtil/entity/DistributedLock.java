@@ -14,7 +14,7 @@ import test.redisson.utils.LocalIpUtil;
 @Data
 @TableName("DistributedLock")
 public class DistributedLock {
-    private Integer id;
+    private String id;
     
     /**
      * 过期时间
@@ -49,7 +49,7 @@ public class DistributedLock {
     public DistributedLock() {
     }
     
-    public DistributedLock(Integer id, Long expirationTime, int deleteStatus, long lockThreadId, String lockThreadName, Integer lockCount) {
+    public DistributedLock(String id, Long expirationTime, int deleteStatus, long lockThreadId, String lockThreadName, Integer lockCount) {
         this.id = id;
         this.expirationTime = expirationTime;
         this.deleteStatus = deleteStatus;

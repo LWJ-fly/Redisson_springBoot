@@ -22,7 +22,7 @@ import java.util.function.Supplier;
  * 版权所有 Copyright www.wenmeng.online
  */
 @Service
-public class DistributedLockserviceImpl implements DistributedLockService {
+public class DistributedLockServiceImpl implements DistributedLockService {
     
     
     /**
