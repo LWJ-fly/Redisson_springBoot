@@ -318,6 +318,11 @@ public class RedisUtil {
          * 保存15秒
          */
         HALF_MINUTE_EXPIRE(15, "保存15秒"),
+    
+        /**
+         * 动态设定时间
+         */
+        DYNAMIC_EXPIRE(86400, "动态设定时间， 默认一天"),
         
         /**
          * 已经过期
@@ -349,6 +354,22 @@ public class RedisUtil {
         
         public String getDesc() {
             return desc;
+        }
+    
+        public ExpireType setExpireTime(Long expireTime) {
+            Assert.notNull(expireTime, "过期时间不能为空");
+            return setExpireTime(Integer.parseInt(String.valueOf(expireTime)));
+        }
+        public ExpireType setExpireTime(Integer expireTime) {
+            Assert.notNull(expireTime, "过期时间不能为空");
+            if (this != DYNAMIC_EXPIRE) {
+                return this;
+            }
+            if (expireTime < 0) {
+                expireTime = DEFAULT_EXPIRE.expireTime;
+            }
+            this.expireTime = expireTime;
+            return this;
         }
         
         public Boolean expire(RExpirable expirable) {
