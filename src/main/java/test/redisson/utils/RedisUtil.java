@@ -277,12 +277,12 @@ public class RedisUtil {
     }
     
     private void verify() {
-        Assert.isTrue(getAvailable(), "Redis不可用， 操作失败 【redis unavailable operate failed】");
+        Assert.isTrue(getAvailable(), "redis unavailable operate failed【Redis不可用， 操作失败】");
     }
     
     private String keyConvert(Object key) {
         verify();
-        Assert.notNull(key, "Redis key 不能为空");
+        Assert.notNull(key, "redis key cannot be empty【Redis key 不能为空】");
         if (key instanceof String) {
             return (String) key;
         }
@@ -318,16 +318,16 @@ public class RedisUtil {
          * 保存15秒
          */
         HALF_MINUTE_EXPIRE(15, "保存15秒"),
-    
-        /**
-         * 动态设定时间
-         */
-        DYNAMIC_EXPIRE(86400, "动态设定时间， 默认一天"),
         
         /**
          * 已经过期
          */
         EXPIRED(-1, "已经过期"),
+        
+        /**
+         * 动态设定时间
+         */
+        DYNAMIC_EXPIRE(86400, "动态设定时间， 默认一天"),
         
         /**
          * 永不过期
@@ -348,28 +348,28 @@ public class RedisUtil {
             this.desc = desc;
         }
         
+        public ExpireType setExpireTime(Long expireTime) {
+            Assert.notNull(expireTime, "the expiration time cannot be empty【过期时间不能为空】");
+            return setExpireTime(Integer.parseInt(String.valueOf(expireTime)));
+        }
+        public ExpireType setExpireTime(Integer expireTime) {
+            Assert.notNull(expireTime, "the expiration time cannot be empty【过期时间不能为空】");
+            if (this != DYNAMIC_EXPIRE) {
+                Assert.notNull(expireTime, "Non-specified dynamic time enumeration. Changing the save time is not supported【非指定动态时间枚举，不支持更改保存时间】");
+            }
+            if (expireTime < 0) {
+                Assert.notNull(expireTime, "the dynamic time cannot be less than 0【指定动态时间不能小于0】");
+            }
+            this.expireTime = expireTime;
+            return this;
+        }
+        
         public Integer getExpireTime() {
             return expireTime;
         }
         
         public String getDesc() {
             return desc;
-        }
-    
-        public ExpireType setExpireTime(Long expireTime) {
-            Assert.notNull(expireTime, "过期时间不能为空");
-            return setExpireTime(Integer.parseInt(String.valueOf(expireTime)));
-        }
-        public ExpireType setExpireTime(Integer expireTime) {
-            Assert.notNull(expireTime, "过期时间不能为空");
-            if (this != DYNAMIC_EXPIRE) {
-                return this;
-            }
-            if (expireTime < 0) {
-                expireTime = DEFAULT_EXPIRE.expireTime;
-            }
-            this.expireTime = expireTime;
-            return this;
         }
         
         public Boolean expire(RExpirable expirable) {
