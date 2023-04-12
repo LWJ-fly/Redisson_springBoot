@@ -1,12 +1,13 @@
 package test.redisson.controller;
 
+import org.apache.commons.lang3.RandomStringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import test.redisson.utils.LockUtil.enums.LockEnum;
-import test.redisson.utils.LockUtil.service.DistributedLockService;
 import test.redisson.utils.LockUtil.service.impl.DistributedLockServiceImpl;
+import test.redisson.utils.RedisUtil;
 
 /**
  * 类描述：请求
@@ -21,6 +22,9 @@ public class web {
     @Autowired
     @Qualifier("distributedLockServiceImpl")
     DistributedLockServiceImpl distributedLockService;
+    
+    @Autowired
+    RedisUtil redisUtil;
     
     @GetMapping("lock")
     public String lock() throws InterruptedException {
@@ -42,6 +46,13 @@ public class web {
         return unLock;
     }
     
+    @GetMapping("redis")
+    public String redis() {
+        String key = RandomStringUtils.randomAlphanumeric(5);
+        redisUtil.set(key, RandomStringUtils.random(8), RedisUtil.ExpireType.QUERY_EXPIRE);
+        return key;
+    }
+    
     @GetMapping("autoLock")
     public Boolean autoLock() {
         return distributedLockService.automaticRenewallock(LockEnum.EXPORT_TASK, () -> {
@@ -57,4 +68,6 @@ public class web {
             return flag;
         });
     }
+    
+    
 }

@@ -3,11 +3,11 @@ package test.redisson.utils.LockUtil.service.impl;
 import com.alibaba.fastjson.JSON;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import test.redisson.utils.LockUtil.enums.LockEnum;
 import test.redisson.utils.LockUtil.monitorTask.ThreadMonitorTask;
 import test.redisson.utils.LockUtil.service.DistributedLockService;
+import test.redisson.utils.RedisUtil;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -37,16 +37,14 @@ public class DistributedLockServiceImpl implements DistributedLockService {
      * 线程锁
      */
     private final ReentrantLock lock = new ReentrantLock();
-    /**
-     * 获取配置文件，判断是否启用Redis
-     */
-    @Value("${redisUsable}")
-    private String redisUsable;
     @Autowired
     private SqlDistributedLockImpl sqlLockService;
     
     @Autowired
     private RedisDistributedLockImpl redisLockService;
+    
+    @Autowired
+    RedisUtil redisUtils;
     
     /**
      * 方法描述：释放锁
@@ -64,7 +62,7 @@ public class DistributedLockServiceImpl implements DistributedLockService {
         try {
             lockFun(lockEnum, subKey, () -> {
                 // redis是否可用
-                if (Boolean.parseBoolean(redisUsable)) {
+                if (redisUtils.getAvailable()) {
                     redisLockService.unLock(lockEnum, subKey);
                 } else {
                     sqlLockService.unLock(lockEnum, subKey);
@@ -86,7 +84,7 @@ public class DistributedLockServiceImpl implements DistributedLockService {
     public void lock(LockEnum lockEnum, Object subKey) {
         lockFun(lockEnum, subKey, () -> {
             // redis是否可用
-            if (Boolean.parseBoolean(redisUsable)) {
+            if (redisUtils.getAvailable()) {
                 redisLockService.lock(lockEnum, subKey);
             } else {
                 sqlLockService.lock(lockEnum, subKey);
@@ -104,7 +102,7 @@ public class DistributedLockServiceImpl implements DistributedLockService {
     public <T> T automaticRenewallock(LockEnum lockEnum, Object subKey, Supplier<T> supplier) {
         try {
             return lockFun(lockEnum, subKey, () -> {
-                if (Boolean.parseBoolean(redisUsable)) {
+                if (redisUtils.getAvailable()) {
                     return redisLockService.automaticRenewallock(lockEnum, supplier);
                 } else {
                     return sqlLockService.automaticRenewallock(lockEnum, subKey, supplier);
@@ -140,7 +138,7 @@ public class DistributedLockServiceImpl implements DistributedLockService {
         try {
             String key = getKey(lockEnum, subKey);
             Thread thread = Thread.currentThread();
-            if (!Boolean.parseBoolean(redisUsable)) {
+            if (!redisUtils.getAvailable()) {
                 // 添加定时监控事件
                 ThreadMonitorTask.addThread(thread);
             }

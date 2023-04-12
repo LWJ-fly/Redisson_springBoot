@@ -9,5 +9,6 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: root
     password: lwj123123
-
-redisUsable: true
+redis:
+  popRedisSize: 1000
+  available: true
