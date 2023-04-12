@@ -156,6 +156,9 @@ public class RedisUtil {
      * @date 2023-04-12 14:18:43
      */
     public <T> List<T> lpop(Object key, int popNum, Class<T> clazz) {
+        if (popNum > popRedisSize) {
+            popNum = Math.toIntExact(popRedisSize);
+        }
         List<Object> objectList = redissonClient.getDeque(keyConvert(key)).pollFirst(popNum);
         return convert(objectList, clazz);
     }
@@ -224,6 +227,9 @@ public class RedisUtil {
      * @date 2023-04-12 14:18:43
      */
     public <T> List<T> rpop(Object key, int popNum, Class<T> clazz) {
+        if (popNum > popRedisSize) {
+            popNum = Math.toIntExact(popRedisSize);
+        }
         List<Object> objectList = redissonClient.getDeque(keyConvert(key)).pollLast(popNum);
         return convert(objectList, clazz);
     }
