@@ -4,26 +4,20 @@ import com.alibaba.fastjson.JSON;
 import org.redisson.api.RDeque;
 import org.redisson.api.RExpirable;
 import org.redisson.api.RedissonClient;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 import org.springframework.util.Assert;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
-public enum RedisUtil {
-    
-    /**
-     * 用户名
-     */
-    userName("用户名称");
-    
-    RedisUtil(String desc) {
-    }
+@Component
+public class RedisUtils {
     
     /**
      * 获取配置文件，判断是否启用Redis
@@ -36,12 +30,22 @@ public enum RedisUtil {
     @Value("${redis.popRedisSize}")
     private Long popRedisSize;
     
+    @Autowired
+    private RedissonClient redissonClient;
+    
     public boolean getAvailable() {
         return available;
     }
     
-    private final static String SEPARATOR = "_";
-    private final RedissonClient redissonClient = ServiceFactory.getBean(RedissonClient.class);
+    /**
+     * 方法描述：保存到redis  (默认一天)
+     * @param key 保存键
+     * @param val 保存值
+     * @date 2023-04-11 18:57:18
+     */
+    public void set(Object key, Object val) {
+        set(key, val, ExpireType.DEFAULT_EXPIRE);
+    }
     
     /**
      * 方法描述：保存到redis
@@ -50,8 +54,8 @@ public enum RedisUtil {
      * @param expireType 设置过期时间
      * @date 2023-04-11 18:57:18
      */
-    public void set(Object key, Object val, RedisUtils.ExpireType expireType) {
-        if (Objects.equals(RedisUtils.ExpireType.NONE_EXPIRE.getExpireTime(), expireType.getExpireTime())) {
+    public void set(Object key, Object val, ExpireType expireType) {
+        if (Objects.equals(ExpireType.NONE_EXPIRE.getExpireTime(), expireType.getExpireTime())) {
             redissonClient.getBucket(keyConvert(key)).set(val);
         } else {
             redissonClient.getBucket(keyConvert(key)).set(val, expireType.getExpireTime(), TimeUnit.SECONDS);
@@ -64,8 +68,8 @@ public enum RedisUtil {
      * @param key  键
      * @param expireType 过期时间枚举
      */
-    public Boolean expire(Object key, RedisUtils.ExpireType expireType) {
-        if (Objects.equals(RedisUtils.ExpireType.NONE_EXPIRE.getExpireTime(), expireType.getExpireTime())) {
+    public Boolean expire(Object key, ExpireType expireType) {
+        if (Objects.equals(ExpireType.NONE_EXPIRE.getExpireTime(), expireType.getExpireTime())) {
             return redissonClient.getBucket(keyConvert(key)).clearExpire();
         } else {
             return expireType.expire(redissonClient.getBucket(keyConvert(key)));
@@ -99,7 +103,7 @@ public enum RedisUtil {
      * @param vals 值
      * @date 2023-04-12 13:38:55
      */
-    public <T> int lPush(Object key, RedisUtils.ExpireType expireType, Collection<T> vals) {
+    public <T> int lPush(Object key, ExpireType expireType, Collection<T> vals) {
         if (vals == null || vals.isEmpty()) {
             return 0;
         }
@@ -112,7 +116,7 @@ public enum RedisUtil {
      * @param vals 值
      * @date 2023-04-12 13:38:55
      */
-    public int lPush(Object key, RedisUtils.ExpireType expireType, Object ...vals) {
+    public int lPush(Object key, ExpireType expireType, Object ...vals) {
         RDeque<Object> deque = redissonClient.getDeque(keyConvert(key));
         expireType.expire(deque);
         return deque.addFirst(vals);
@@ -166,7 +170,7 @@ public enum RedisUtil {
      * @param vals 值
      * @date 2023-04-12 13:38:55
      */
-    public <T> int rPush(Object key, RedisUtils.ExpireType expireType, Collection<T> vals) {
+    public <T> int rPush(Object key, ExpireType expireType, Collection<T> vals) {
         if (vals == null || vals.isEmpty()) {
             return 0;
         }
@@ -180,7 +184,7 @@ public enum RedisUtil {
      * @param vals 值
      * @date 2023-04-12 13:38:55
      */
-    public int rPush(Object key, RedisUtils.ExpireType expireType, Object ...vals) {
+    public int rPush(Object key, ExpireType expireType, Object ...vals) {
         if (vals == null) {
             return 0;
         }
@@ -230,6 +234,60 @@ public enum RedisUtil {
         return convert(objectList, clazz);
     }
     
+    
+    /**
+     * 方法描述：内部数据转换为指定对象
+     * @param val 源对象
+     * @param clazz 指定类
+     * @return {@link T} 返回指定对象类型
+     * @date 2023-04-12 14:13:16
+     */
+    private <T> T convert(Object val, Class<T> clazz) {
+        if (val == null) {
+            return null;
+        }
+        if (val.getClass() == clazz) {
+            return (T)val;
+        }
+        if (clazz == String.class) {
+            return (T) JSON.toJSONString(val);
+        }
+        return JSON.parseObject(JSON.toJSONString(val), clazz);
+    }
+    
+    /**
+     * 方法描述：内部数据转换为指定对象
+     * @param vals 源对象
+     * @param clazz 指定类
+     * @return {@link T} 返回指定对象类型
+     * @date 2023-04-12 14:13:16
+     */
+    private <T> List<T> convert(List<Object> vals, Class<T> clazz) {
+        if (vals == null || vals.isEmpty()) {
+            return new ArrayList<>();
+        }
+        if (vals.get(0).getClass() == clazz) {
+            return (List<T>) vals;
+        }
+        List<T> tList = new ArrayList<>();
+        for (Object val : vals) {
+            tList.add(convert(val, clazz));
+        }
+        return tList;
+    }
+    
+    private void verify() {
+        Assert.isTrue(getAvailable(), "redis unavailable operate failed【Redis不可用， 操作失败】");
+    }
+    
+    private String keyConvert(Object key) {
+        verify();
+        Assert.notNull(key, "redis key cannot be empty【Redis key 不能为空】");
+        if (key instanceof String) {
+            return (String) key;
+        }
+        return JSON.toJSONString(key);
+    }
     
     public enum ExpireType {
         /**
@@ -283,18 +341,18 @@ public enum RedisUtil {
         /**
          * 描述
          */
-        private final String desc;
+        private String desc;
         
         ExpireType(Integer expireTime, String desc) {
             this.expireTime = expireTime;
             this.desc = desc;
         }
         
-        public RedisUtil.ExpireType setExpireTime(Long expireTime) {
+        public ExpireType setExpireTime(Long expireTime) {
             Assert.notNull(expireTime, "the expiration time cannot be empty【过期时间不能为空】");
             return setExpireTime(Integer.parseInt(String.valueOf(expireTime)));
         }
-        public RedisUtil.ExpireType setExpireTime(Integer expireTime) {
+        public ExpireType setExpireTime(Integer expireTime) {
             Assert.notNull(expireTime, "the expiration time cannot be empty【过期时间不能为空】");
             if (this != DYNAMIC_EXPIRE) {
                 Assert.notNull(expireTime, "Non-specified dynamic time enumeration. Changing the save time is not supported【非指定动态时间枚举，不支持更改保存时间】");
@@ -315,60 +373,10 @@ public enum RedisUtil {
         }
         
         public Boolean expire(RExpirable expirable) {
-            if (this == RedisUtil.ExpireType.NONE_EXPIRE) {
+            if (this == ExpireType.NONE_EXPIRE) {
                 return expirable.clearExpire();
             }
             return expirable.expire(Duration.ofSeconds(this.getExpireTime()));
         }
-    }
-    
-    private String keyConvert(Object key) {
-        verify();
-        Assert.notNull(key, "redis key cannot be empty【Redis key 不能为空】");
-        if (key instanceof String) {
-            return this.name() + SEPARATOR + key;
-        }
-        return this.name() + SEPARATOR + JSON.toJSONString(key);
-    } /**
-     * 方法描述：内部数据转换为指定对象
-     * @param val 源对象
-     * @param clazz 指定类
-     * @return {@link T} 返回指定对象类型
-     * @date 2023-04-12 14:13:16
-     */
-    private <T> T convert(Object val, Class<T> clazz) {
-        if (val == null) {
-            return null;
-        }
-        if (val.getClass() == clazz) {
-            return (T)val;
-        }
-        if (clazz == String.class) {
-            return (T) JSON.toJSONString(val);
-        }
-        return JSON.parseObject(JSON.toJSONString(val), clazz);
-    }
-    
-    /**
-     * 方法描述：内部数据转换为指定对象
-     * @param vals 源对象
-     * @param clazz 指定类
-     * @return {@link T} 返回指定对象类型
-     * @date 2023-04-12 14:13:16
-     */
-    private <T> List<T> convert(List<Object> vals, Class<T> clazz) {
-        if (vals == null || vals.isEmpty()) {
-            return new ArrayList<>();
-        }
-        if (vals.get(0).getClass() == clazz) {
-            return (List<T>) vals;
-        }
-        List<T> tList = new ArrayList<>();
-        for (Object val : vals) {
-            tList.add(convert(val, clazz));
-        }
-        return tList;
-    }
-    private void verify() {
     }
 }

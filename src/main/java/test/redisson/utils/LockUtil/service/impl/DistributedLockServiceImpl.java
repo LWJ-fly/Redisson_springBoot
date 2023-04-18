@@ -7,7 +7,7 @@ import org.springframework.stereotype.Service;
 import test.redisson.utils.LockUtil.enums.LockEnum;
 import test.redisson.utils.LockUtil.monitorTask.ThreadMonitorTask;
 import test.redisson.utils.LockUtil.service.DistributedLockService;
-import test.redisson.utils.RedisUtil;
+import test.redisson.utils.RedisUtils;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -44,7 +44,7 @@ public class DistributedLockServiceImpl implements DistributedLockService {
     private RedisDistributedLockImpl redisLockService;
     
     @Autowired
-    RedisUtil redisUtils;
+    RedisUtils redisUtils;
     
     /**
      * 方法描述：释放锁

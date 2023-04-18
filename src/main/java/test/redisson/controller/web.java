@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.RestController;
 import test.redisson.utils.LockUtil.enums.LockEnum;
 import test.redisson.utils.LockUtil.service.impl.DistributedLockServiceImpl;
 import test.redisson.utils.RedisUtil;
+import test.redisson.utils.RedisUtils;
 
 /**
  * 类描述：请求
@@ -24,7 +25,13 @@ public class web {
     DistributedLockServiceImpl distributedLockService;
     
     @Autowired
-    RedisUtil redisUtil;
+    RedisUtils redisUtil;
+    
+    @GetMapping("test")
+    public String test() throws Exception {
+        redisUtil.set(123, RandomStringUtils.random(6), RedisUtils.ExpireType.QUERY_EXPIRE);
+        return RedisUtil.userName.get(123, String.class);
+    }
     
     @GetMapping("lock")
     public String lock() throws InterruptedException {
@@ -49,7 +56,7 @@ public class web {
     @GetMapping("redis")
     public String redis() {
         String key = RandomStringUtils.randomAlphanumeric(5);
-        redisUtil.set(key, RandomStringUtils.random(8), RedisUtil.ExpireType.QUERY_EXPIRE);
+        redisUtil.set(key, RandomStringUtils.random(8), RedisUtils.ExpireType.QUERY_EXPIRE);
         return key;
     }
     

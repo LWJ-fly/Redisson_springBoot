@@ -3,12 +3,16 @@ package test.redisson;
 import com.alibaba.fastjson.JSON;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.redisson.Redisson;
-import org.redisson.api.RBucket;
 import org.redisson.api.RedissonClient;
 import org.redisson.client.codec.StringCodec;
 import org.redisson.config.Config;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
+import test.redisson.utils.RedisUtil;
+import test.redisson.utils.RedisUtils;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -21,7 +25,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 @SpringBootTest
-//@RunWith(SpringJUnit4ClassRunner.class)
+@RunWith(SpringJUnit4ClassRunner.class)
 public class RedissonApplicationTests {
     private final static String redisHost = "redis://172.18.1.102:6379";
     private final static Integer redisDatabase = 0;
@@ -105,35 +109,14 @@ public class RedissonApplicationTests {
     /**
      * 方法描述：字符串模糊查询
      */
+    @Autowired
+    RedisUtils redisUtil;
+    
     @Test
     public void getString() {
-        RedissonClient client = getClient();
-//        RKeys keys = client.getKeys();
-//        keys.getKeysByPattern("*").forEach(System.out::println);
-        
-        // 对象 字符串
-        RBucket<Object> bucket = client.getBucket("StringBucket");
-        bucket.set("666");
-        bucket.set("999");
-        bucket.set("888");
-        System.out.println(bucket.get());
-        
-        //Hash
-//        RMap<Object, Object> maptest = client.getMap("maptest");
-//        maptest.put("name", "张三");
-//        maptest.put("age", "18");
-//        maptest.put("money", "1w");
-//        maptest.expire(30, TimeUnit.SECONDS);
-//        // 通过key获取value
-//        System.out.println(client.getMap("maptest").get("name"));
-        
-        // 实体
-//        RBucket<Object> userTest = client.getBucket("userTest");
-//
-//        userTest.set(new User("张三", "UserImg", 18));
-//        Object userTest1 = client.getBucket("userTest").get();
-//
-//        System.out.println(userTest1);
+        redisUtil.set(123, 1234, RedisUtils.ExpireType.TWO_MINUTES_EXPIRE);
+        String name = RedisUtil.userName.get(123, String.class);
+        System.out.println(name);
     }
     
     /**
