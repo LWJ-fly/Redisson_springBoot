@@ -26,13 +26,13 @@ public enum RedisUtil {
     /**
      * 获取配置文件，判断是否启用Redis
      */
-    private final Boolean available = BeanFactory.getProperty("redis.available", Boolean.class);;
+    private static final Boolean available = BeanFactory.getProperty("redis.available", Boolean.class);;
     /**
      * reids最大弹出数量
      */
     private final Long popRedisSize = BeanFactory.getProperty("redis.popRedisSize", Long.class);
     
-    public boolean getAvailable() {
+    public static boolean getAvailable() {
         return available;
     }
     
