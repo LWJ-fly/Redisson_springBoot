@@ -4,14 +4,12 @@ import com.alibaba.fastjson.JSON;
 import org.redisson.api.RDeque;
 import org.redisson.api.RExpirable;
 import org.redisson.api.RedissonClient;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.util.Assert;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
@@ -28,20 +26,18 @@ public enum RedisUtil {
     /**
      * 获取配置文件，判断是否启用Redis
      */
-    @Value("${redis.available}")
-    private Boolean available;
+    private final Boolean available = BeanFactory.getProperty("redis.available", Boolean.class);;
     /**
      * reids最大弹出数量
      */
-    @Value("${redis.popRedisSize}")
-    private Long popRedisSize;
+    private final Long popRedisSize = BeanFactory.getProperty("redis.popRedisSize", Long.class);
     
     public boolean getAvailable() {
         return available;
     }
     
     private final static String SEPARATOR = "_";
-    private final RedissonClient redissonClient = ServiceFactory.getBean(RedissonClient.class);
+    private final RedissonClient redissonClient = BeanFactory.getBean(RedissonClient.class);
     
     /**
      * 方法描述：保存到redis
@@ -370,5 +366,6 @@ public enum RedisUtil {
         return tList;
     }
     private void verify() {
+        Assert.isTrue(getAvailable(), "redis unavailable operate failed【Redis不可用， 操作失败】");
     }
 }
