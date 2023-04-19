@@ -9,8 +9,10 @@ import org.springframework.util.Assert;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 public enum RedisUtil {
@@ -88,6 +90,33 @@ public enum RedisUtil {
         return convert(val, clazz);
     }
     
+    /**
+     * 方法描述：获取该类型下所有的Key，并返回
+     * @return {@link Set< String>} 所有的Key
+     * @date 2023-04-19 14:16:00
+     */
+    public Set<String> getAllKeys() {
+        Set<String> keys = new HashSet<>();
+        String prefix = this.name() + SEPARATOR;
+        for (String key : redissonClient.getKeys().getKeysByPattern(prefix + "*")) {
+            keys.add(key.substring(prefix.length()));
+        }
+        return keys;
+    }
+    /**
+     * 方法描述：获取该类型下所有的Key，并返回
+     * @param keyPart key关键字
+     * @return {@link Set< String>} 所有的Key
+     * @date 2023-04-19 14:16:00
+     */
+    public Set<String> getAllKeys(Object keyPart) {
+        Set<String> keys = new HashSet<>();
+        String prefix = this.name() + SEPARATOR;
+        for (String key : redissonClient.getKeys().getKeysByPattern(prefix + "*" + keyPart + "*")) {
+            keys.add(key.substring(prefix.length()));
+        }
+        return keys;
+    }
     /**
      * 方法描述：从队列左端存值
      * @param key 键

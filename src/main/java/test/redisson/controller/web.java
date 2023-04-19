@@ -10,6 +10,8 @@ import test.redisson.utils.LockUtil.service.impl.DistributedLockServiceImpl;
 import test.redisson.utils.RedisUtil;
 import test.redisson.utils.RedisUtils;
 
+import java.util.Set;
+
 /**
  * 类描述：请求
  * @author 技匠
@@ -28,9 +30,9 @@ public class web {
     RedisUtils redisUtil;
     
     @GetMapping("test")
-    public String test() throws Exception {
-        redisUtil.set(123, RandomStringUtils.random(6), RedisUtils.ExpireType.QUERY_EXPIRE);
-        return RedisUtil.userName.get(123, String.class);
+    public Set<String> test() throws Exception {
+        RedisUtil.userName.set(123 + RandomStringUtils.randomNumeric(6), RandomStringUtils.random(6), RedisUtils.ExpireType.QUERY_EXPIRE);
+        return RedisUtil.userName.getAllKeys();
     }
     
     @GetMapping("lock")
